@@ -253,6 +253,31 @@ def generate_svg(config: Union[OGCardConfig, str]) -> str:
         _render_event_ticket_feature(computed, config, theme, elements_svg)
 
     # 9. Optional Watermark or Logo
+    if config.watermark:
+        from og_canvas_forge.watermark import render_watermark_svg
+        wm_svg = render_watermark_svg(
+            config.watermark,
+            width=width,
+            height=height,
+            default_color=theme.text_primary,
+        )
+        if wm_svg:
+            elements_svg.append(wm_svg)
+
+    if config.qr_code:
+        from og_canvas_forge.qr_matrix import render_qr_svg
+        qr_content = str(config.qr_code) if not isinstance(config.qr_code, bool) else (config.site_name or config.title)
+        qr_size = 96
+        qr_x = width - qr_size - 48
+        qr_y = height - qr_size - 40
+        qr_badge = render_qr_svg(qr_content, size=qr_size, fg=theme.text_primary, bg="rgba(0,0,0,0.45)")
+        elements_svg.append(f"""
+    <!-- QR Code Scannable Badge -->
+    <g transform="translate({qr_x}, {qr_y})">
+      {qr_badge}
+    </g>
+""")
+
     if config.logo_svg:
         elements_svg.append(f"""
     <!-- Custom Brand Logo -->

@@ -73,6 +73,8 @@ except ImportError:
         from .mcp_server import get_theme, list_themes
 
 from .mcp_server import handle_jsonrpc_request, process_request, run_stdio_server
+from .qr_matrix import generate_qr_matrix, render_barcode_svg, render_qr_svg
+from .watermark import WatermarkSpec, render_watermark_svg
 
 __all__ = [
     "__version__",
@@ -98,6 +100,11 @@ __all__ = [
     "generate_html_meta",
     "calculate_contrast_ratio",
     "calculate_relative_luminance",
+    "generate_qr_matrix",
+    "render_qr_svg",
+    "render_barcode_svg",
+    "WatermarkSpec",
+    "render_watermark_svg",
     "handle_jsonrpc_request",
     "process_request",
     "run_stdio_server",

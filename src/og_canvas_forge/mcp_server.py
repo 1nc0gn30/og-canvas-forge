@@ -1142,6 +1142,25 @@ def _render_svg_card(config: OGCardConfig, theme: CardTheme) -> str:
       <text x="0" y="0" text-anchor="end" font-family="{theme.font_primary}, system-ui, sans-serif" font-size="16" font-weight="700" fill="{theme.accent}">{html.escape(site_name)}</text>
     </g>""")
 
+        if getattr(config, "watermark", None):
+            from .watermark import render_watermark_svg
+            wm = render_watermark_svg(config.watermark, width=width, height=height, default_color=theme.text_primary)
+            if wm:
+                inner_content.append(wm)
+
+        if getattr(config, "qr_code", None):
+            from .qr_matrix import render_qr_svg
+            qr_content = str(config.qr_code) if not isinstance(config.qr_code, bool) else (config.site_name or config.title)
+            qr_size = 96
+            qr_x = width - qr_size - 48
+            qr_y = height - qr_size - 40
+            qr_badge = render_qr_svg(qr_content, size=qr_size, fg=theme.text_primary, bg="rgba(0,0,0,0.45)")
+            inner_content.append(f"""
+    <!-- QR Code Badge -->
+    <g transform="translate({qr_x}, {qr_y})">
+      {qr_badge}
+    </g>""")
+
     # Combine SVG
     svg_body = "\n".join(inner_content)
     svg_document = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
@@ -1311,6 +1330,14 @@ MCP_TOOLS = [
                 "badge": {
                     "type": "string",
                     "description": "Custom badge pill text",
+                },
+                "watermark": {
+                    "type": "string",
+                    "description": "Optional watermark overlay text (supports prefixes like 'CONFIDENTIAL:draft', 'STAMP:approved', 'DIAGONAL:preview')",
+                },
+                "qr_code": {
+                    "type": "string",
+                    "description": "Optional URL or text to synthesize as a scannable QR Code badge on the card",
                 },
                 "format": {
                     "type": "string",
@@ -1525,6 +1552,73 @@ MCP_TOOLS = [
             "required": ["title"],
         },
     },
+    {
+        "name": "og_render_qr_code",
+        "description": "Synthesize a standalone or embeddable scannable QR Code SVG badge with Reed-Solomon error correction.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "URL or text payload to encode into QR matrix (required)",
+                },
+                "size": {
+                    "type": "integer",
+                    "description": "Pixel width and height (default: 120)",
+                    "default": 120,
+                },
+                "fg": {
+                    "type": "string",
+                    "description": "Foreground color of QR modules (default: #ffffff)",
+                    "default": "#ffffff",
+                },
+                "bg": {
+                    "type": "string",
+                    "description": "Background color of badge container (default: rgba(15, 23, 42, 0.75))",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional label text rendered beneath the QR code (e.g. 'SCAN TO VISIT')",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "og_render_watermark",
+        "description": "Generate a brand or security watermark SVG layer (subtle corner, large diagonal, confidential stamp, or repeated grid).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Watermark text (e.g. 'CONFIDENTIAL', 'PREVIEW', 'company.com')",
+                },
+                "style": {
+                    "type": "string",
+                    "enum": ["subtle", "diagonal", "stamp", "badge", "repeat_grid", "confidential"],
+                    "description": "Watermark presentation style (default: 'subtle')",
+                    "default": "subtle",
+                },
+                "width": {
+                    "type": "integer",
+                    "description": "Canvas width in pixels (default: 1200)",
+                    "default": 1200,
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Canvas height in pixels (default: 630)",
+                    "default": 630,
+                },
+                "opacity": {
+                    "type": "number",
+                    "description": "Watermark opacity in range [0.01, 1.0]",
+                    "default": 0.08,
+                },
+            },
+            "required": ["text"],
+        },
+    },
 ]
 
 MCP_RESOURCES = [
@@ -1735,6 +1829,8 @@ def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             code_language=arguments.get("code_language"),
             episode_number=arguments.get("episode_number"),
             badge=BadgeSpec(text=arguments["badge"]) if arguments.get("badge") else None,
+            watermark=arguments.get("watermark"),
+            qr_code=arguments.get("qr_code") or arguments.get("qr"),
         )
 
         card = generate_card(config, template=arguments.get("template"))
@@ -1916,6 +2012,37 @@ def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             publisher_name=arguments.get("publisher_name"),
         )
         return {"content": [{"type": "text", "text": schema_code}], "isError": False}
+
+    elif tool_key in ("og_render_qr_code", "render_qr_code", "qr_code"):
+        text = str(arguments.get("text", "")).strip()
+        if not text:
+            return {"content": [{"type": "text", "text": "Error: 'text' parameter is required"}], "isError": True}
+        size = int(arguments.get("size", 120))
+        fg = str(arguments.get("fg", "#ffffff"))
+        bg = str(arguments.get("bg", "rgba(15, 23, 42, 0.75)"))
+        label = arguments.get("label")
+        from .qr_matrix import render_qr_svg
+        qr_svg = render_qr_svg(text, size=size, fg=fg, bg=bg, label=label)
+        return {
+            "content": [{"type": "text", "text": qr_svg}],
+            "isError": False,
+        }
+
+    elif tool_key in ("og_render_watermark", "render_watermark", "watermark"):
+        text = str(arguments.get("text", "")).strip()
+        if not text:
+            return {"content": [{"type": "text", "text": "Error: 'text' parameter is required"}], "isError": True}
+        style = str(arguments.get("style", "subtle"))
+        width = int(arguments.get("width", 1200))
+        height = int(arguments.get("height", 630))
+        opacity = float(arguments.get("opacity", 0.08))
+        from .watermark import WatermarkSpec, render_watermark_svg
+        spec = WatermarkSpec(text=text, style=style, opacity=opacity)
+        wm_svg = render_watermark_svg(spec, width=width, height=height)
+        return {
+            "content": [{"type": "text", "text": wm_svg}],
+            "isError": False,
+        }
 
     else:
         return {

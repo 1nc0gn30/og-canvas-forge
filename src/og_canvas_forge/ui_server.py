@@ -471,6 +471,16 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             self._handle_api_audit({"theme": theme, "template": template})
             return
 
+        # 5b. API: QR Code Generation
+        if path == "/api/qr":
+            query = urllib.parse.parse_qs(parsed_url.query)
+            text = query.get("text", ["https://example.com"])[0]
+            size = int(query.get("size", [120])[0])
+            from .qr_matrix import render_qr_svg
+            qr_svg = render_qr_svg(text, size=size)
+            self._send_json({"text": text, "svg": qr_svg, "size": size})
+            return
+
         # 6. UI Root and Static Files
         if path in ("/", "/index.html", "/studio"):
             self._serve_studio_index()
@@ -544,6 +554,9 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             return
         elif path == "/api/schema-ld":
             self._handle_api_schema_ld(payload)
+            return
+        elif path == "/api/qr":
+            self._handle_api_qr(payload)
             return
 
         self._send_error_json(f"POST endpoint not found: {path}", status=HTTPStatus.NOT_FOUND)
@@ -668,6 +681,8 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
         layout = payload.get("layout", "modern_minimal")
         pattern = payload.get("pattern", "dot_grid")
         dims = payload.get("dimensions", {"width": 1200, "height": 630})
+        watermark = payload.get("watermark")
+        qr_code = payload.get("qr_code") or payload.get("qr")
 
         dim_obj = CardDimension.from_value(dims)
         config = OGCardConfig(
@@ -681,6 +696,8 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             layout=layout,
             dimensions=dim_obj,
             pattern=pattern,
+            watermark=watermark,
+            qr_code=qr_code,
         )
 
         svg_content = None
@@ -834,6 +851,20 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"schema_ld": json.loads(json_str), "raw_script": f'<script type="application/ld+json">\n{json_str}\n</script>'})
         except Exception as err:
             self._send_error_json(f"Schema.org generation failed: {err}", status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def _handle_api_qr(self, payload: Dict[str, Any]) -> None:
+        """Synthesize QR Code SVG from payload."""
+        text = str(payload.get("text", "")).strip()
+        if not text:
+            self._send_error_json("Missing required parameter 'text'")
+            return
+        size = int(payload.get("size", 120))
+        fg = str(payload.get("fg", "#ffffff"))
+        bg = str(payload.get("bg", "rgba(15, 23, 42, 0.75)"))
+        label = payload.get("label")
+        from .qr_matrix import render_qr_svg
+        qr_svg = render_qr_svg(text, size=size, fg=fg, bg=bg, label=label)
+        self._send_json({"text": text, "svg": qr_svg, "size": size})
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress noisy request logs in test/silent mode unless DEBUG is set."""

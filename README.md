@@ -166,12 +166,16 @@ Integrate `og-canvas-forge` directly into **Claude Desktop**, **Cursor**, or **C
 ```
 
 ### Registered Tools:
-1. `og_generate_card`: Synthesize single OpenGraph social card with title, subtitle, author, tags, theme, and layout.
+1. `og_generate_card`: Synthesize single OpenGraph social card with title, subtitle, author, tags, theme, layout, watermark, and scannable QR code.
 2. `og_batch_generate`: Generate multiple social cards in a single batch call.
 3. `og_render_html_meta`: Generate production HTML `<meta>` tags for Open Graph and Twitter summary cards.
-4. `og_list_templates`: List and filter preconfigured social card templates.
-5. `og_list_themes`: List built-in color themes and hex palettes.
-6. `og_diagnostics`: Verify platform compatibility, system metrics, and template readiness.
+4. `og_render_qr_code`: Synthesize standalone or embeddable scannable QR Code SVG badge with Reed-Solomon error correction.
+5. `og_render_watermark`: Generate security or branding watermark overlay (subtle, diagonal, confidential, stamp, repeat grid).
+6. `og_audit_accessibility`: Audit card contrast ratios and compliance against WCAG 2.2 AA / AAA standards.
+7. `og_generate_schema_ld`: Synthesize Schema.org Rich Snippet JSON-LD metadata for search engine indexing.
+8. `og_list_templates`: List and filter preconfigured social card templates.
+9. `og_list_themes`: List built-in color themes and hex palettes.
+10. `og_diagnostics`: Verify platform compatibility, system metrics, and template readiness.
 
 ---
 
@@ -184,6 +188,8 @@ Launch the local studio server via `og-canvas-forge serve` to access the interac
 - **REST Endpoints**:
   - `GET /api/templates`: List all template presets.
   - `GET /api/themes`: List all color themes and palettes.
+  - `GET /api/qr`: Synthesize QR Code SVG dynamically.
+  - `POST /api/qr`: Synthesize QR Code SVG with custom sizing, foreground, and background.
   - `POST /api/generate`: Synthesize card SVG, raster data, or HTML meta.
   - `POST /api/meta`: Generate HTML meta tags.
   - `POST /api/batch`: Batch process multiple cards.

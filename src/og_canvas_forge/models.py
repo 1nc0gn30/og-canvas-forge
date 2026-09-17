@@ -244,6 +244,7 @@ class OGCardConfig:
     ticket_number: Optional[str] = None
     badge: Optional[Union[BadgeSpec, str]] = None
     watermark: Optional[str] = None
+    qr_code: Optional[Union[str, bool]] = None
     custom_css: Optional[str] = None
 
     def __post_init__(self) -> None:

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "og-canvas-forge"
 version = "0.1.0"
-description = "Pure Python zero-dependency OpenGraph social card canvas forge, Google OG Studio UI, and MCP server."
+description = "Pure Python zero-dependency OpenGraph social card canvas forge with QR Matrix Synthesizer, Watermark & Branding Engine, WCAG 2.2 Contrast Auditor, Schema.org JSON-LD, Studio UI, and MCP Server."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -19,7 +19,18 @@ keywords = [
     "preview-generator",
     "twitter-cards",
     "mcp-server",
-    "canvas-forge"
+    "canvas-forge",
+    "qr-code",
+    "barcode",
+    "watermark",
+    "branding",
+    "wcag-accessibility",
+    "contrast-checker",
+    "schema-org",
+    "json-ld",
+    "material-design-3",
+    "pure-python",
+    "zero-dependency"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

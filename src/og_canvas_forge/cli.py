@@ -212,6 +212,8 @@ def handle_generate(args: argparse.Namespace) -> int:
         episode_number=args.episode,
         ticket_number=args.ticket,
         badge=BadgeSpec(text=args.badge) if args.badge else None,
+        watermark=getattr(args, "watermark", None),
+        qr_code=getattr(args, "qr_code", None),
     )
 
     card = generate_card(config, template=args.template)
@@ -300,6 +302,23 @@ def handle_generate(args: argparse.Namespace) -> int:
             sys.stderr.write(f"  • {el.capitalize():<10}: {ratio:.2f}:1 [{aa}]\n")
         sys.stderr.write("\n")
 
+    return 0
+
+
+def handle_qr(args: argparse.Namespace) -> int:
+    """Handle `qr` subcommand: synthesize standalone scannable QR Code SVG."""
+    from .qr_matrix import render_qr_svg
+    text = args.text
+    size = getattr(args, "size", 120)
+    fg = getattr(args, "fg", "#ffffff")
+    label = getattr(args, "label", None)
+    svg = render_qr_svg(text, size=size, fg=fg, label=label)
+    if getattr(args, "output", None) and args.output != "-":
+        atomic_write_text(args.output, svg, encoding="utf-8")
+        if not getattr(args, "quiet", False):
+            sys.stdout.write(Term.green(f"✔ QR Code SVG saved to: {args.output}\n"))
+    else:
+        sys.stdout.write(svg)
     return 0
 
 
@@ -1466,8 +1485,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_gen.add_argument("--episode", help="Episode or issue number for podcast/newsletter layout")
     p_gen.add_argument("--ticket", help="Ticket identifier for event_ticket layout")
     p_gen.add_argument("--badge", help="Custom badge pill text")
+    p_gen.add_argument("--watermark", help="Watermark text or prefix (e.g. 'CONFIDENTIAL:draft', 'STAMP:approved', 'preview')")
+    p_gen.add_argument("--qr", "--qr-code", dest="qr_code", help="URL or text to encode as scannable QR Code badge on card")
     p_gen.add_argument("--preview", action="store_true", help="Open generated card in default web browser")
     p_gen.add_argument("--audit", action="store_true", help="Audit card contrast and accessibility against WCAG 2.2 criteria")
+
+    # 1b. `qr`
+    p_qr = subparsers.add_parser("qr", help="Synthesize a standalone scannable QR Code SVG badge", parents=[common_parser])
+    p_qr.add_argument("text", help="URL or text payload to encode")
+    p_qr.add_argument("-o", "--output", help="Output file path (default: stdout)")
+    p_qr.add_argument("-s", "--size", type=int, default=120, help="Pixel size (default: 120)")
+    p_qr.add_argument("--fg", default="#ffffff", help="Foreground color (default: #ffffff)")
+    p_qr.add_argument("--label", help="Optional label beneath QR code")
 
     # 2. `batch`
     p_batch = subparsers.add_parser("batch", help="Batch generate cards from JSON or CSV file", parents=[common_parser])
@@ -1579,6 +1608,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not args.title and getattr(args, "title_pos", None):
             args.title = args.title_pos
         return handle_generate(args)
+    elif subcommand == "qr":
+        return handle_qr(args)
     elif subcommand == "batch":
         return handle_batch(args)
     elif subcommand == "templates":
