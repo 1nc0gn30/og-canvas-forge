@@ -37,6 +37,7 @@ jobs:
       - name: Verify CLI entry points
         shell: bash
         run: |
+          python -m og_canvas_forge --help
           python -m og_canvas_forge.cli --help
           og-canvas-forge --help
           og-canvas --help
