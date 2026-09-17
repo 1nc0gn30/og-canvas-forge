@@ -1,4 +1,4 @@
-"""Pure Python stdlib ThreadingHTTPServer for Google OG Canvas Studio UI and REST API.
+"""Pure Python stdlib ThreadingHTTPServer for OG Canvas Forge Studio UI and REST API.
 
 Provides local development server, REST API endpoints for card generation, templates,
 themes, meta tags, and batch processing, plus embedded fallback UI support.
@@ -549,7 +549,7 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Google OG Canvas Studio (Embedded)</title>
+  <title>OG Canvas Forge Studio (Embedded)</title>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; padding: 40px; background: #f8f9fa; color: #202124; }
     .card { background: white; border-radius: 16px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }
@@ -558,7 +558,7 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
 </head>
 <body>
   <div class="card">
-    <h1>Google OG Canvas Studio</h1>
+    <h1>OG Canvas Forge Studio</h1>
     <p>The Studio UI server is running successfully in pure Python stdlib mode!</p>
     <p>Please ensure <code>public/index.html</code> is present for the complete Material 3 visual studio.</p>
     <p>API status: <a href="/api/stats">/api/stats</a> | Templates: <a href="/api/templates">/api/templates</a></p>
@@ -610,7 +610,7 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
         uptime = time.time() - self.studio_server.start_time
         stats = {
             "status": "healthy",
-            "server": "Google OG Canvas Studio",
+            "server": "OG Canvas Forge Studio",
             "version": "0.1.0",
             "uptime_seconds": round(uptime, 2),
             "cards_generated": self.studio_server.cards_generated,
@@ -820,11 +820,11 @@ def start_server(
     open_browser: bool = False,
     public_dir: Optional[Union[str, Path]] = None,
 ) -> None:
-    """Start and run the Google OG Canvas Studio server."""
+    """Start and run the OG Canvas Forge Studio server."""
     server = create_server(host, port, public_dir=public_dir)
     url = f"http://{host}:{port}"
 
-    print(f"🎨 Google OG Canvas Studio Server running at: {url}")
+    print(f"🎨 OG Canvas Forge Studio Server running at: {url}")
     print(f"📁 Serving static assets from: {server.public_dir}")
     print("Press Ctrl+C to stop.")
 
@@ -837,7 +837,7 @@ def start_server(
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping Google OG Canvas Studio Server...")
+        print("\nStopping OG Canvas Forge Studio Server...")
     finally:
         server.server_close()
 
@@ -846,7 +846,7 @@ def main() -> None:
     """CLI entry point for running the Studio UI server."""
     parser = argparse.ArgumentParser(
         prog="og-canvas-forge-server",
-        description="Google OG Canvas Studio Local UI & REST API Server",
+        description="OG Canvas Forge Studio Local UI & REST API Server",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")

@@ -19,14 +19,14 @@ def test_server_initialization(temp_workspace: Path):
 
 
 def test_http_get_index(live_server):
-    """Verify GET / returns Google OG Canvas Studio HTML page."""
+    """Verify GET / returns OG Canvas Forge HTML page."""
     server, base_url = live_server
     req = urllib.request.Request(f"{base_url}/")
     with urllib.request.urlopen(req) as resp:
         assert resp.status == 200
         assert "text/html" in resp.headers.get("Content-Type", "")
         body = resp.read().decode("utf-8")
-        assert "Google OG Canvas Studio" in body or "OpenGraph" in body
+        assert "OG Canvas Forge" in body or "OpenGraph" in body
 
 
 def test_http_get_templates_api(live_server):

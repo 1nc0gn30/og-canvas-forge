@@ -1,7 +1,7 @@
 """Multi-OS Command Line Interface for og-canvas-forge.
 
 Provides subcommands for card generation, batch processing, template listing,
-theme exploration, HTML meta generation, Google Material 3 Studio Web UI hosting,
+theme exploration, HTML meta generation, Material 3 Studio Web UI hosting,
 MCP stdio protocol execution, platform diagnostics, and self-verification test runner.
 Zero external runtime dependencies.
 """
@@ -549,7 +549,7 @@ def handle_mcp(args: argparse.Namespace) -> int:
 
 
 # ============================================================================
-# GOOGLE MATERIAL 3 STUDIO WEB UI HTTP SERVER
+# MATERIAL 3 STUDIO WEB UI HTTP SERVER
 # ============================================================================
 
 STUDIO_HTML_PAGE = """<!DOCTYPE html>
@@ -557,7 +557,7 @@ STUDIO_HTML_PAGE = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OG Canvas Studio - Google Material 3</title>
+  <title>OG Canvas Forge Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -1064,7 +1064,7 @@ STUDIO_HTML_PAGE = """<!DOCTYPE html>
 
 
 class StudioHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
-    """Zero-dependency HTTP request handler for Google Material 3 Studio Web UI & REST API."""
+    """Zero-dependency HTTP request handler for Material 3 Studio Web UI & REST API."""
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress standard HTTP server access logs unless debugging."""
@@ -1170,7 +1170,7 @@ def handle_serve(args: argparse.Namespace) -> int:
     url = f"http://{host}:{port}"
 
     if not getattr(args, "quiet", False):
-        print(f"\n{Term.green('🚀 Google Material 3 OG Canvas Studio is Live!')}")
+        print(f"\n{Term.green('🚀 OG Canvas Forge Studio is Live!')}")
         print(f"  URL:            {Term.bold(Term.cyan(url))}")
         print(f"  Host:           {host}:{port}")
         print(f"  REST API:       {url}/api/generate, {url}/api/templates, {url}/api/themes")
@@ -1426,7 +1426,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_meta.add_argument("-o", "--output", help="File to write meta tags to (or stdout if omitted)")
 
     # 6. `serve`
-    p_srv = subparsers.add_parser("serve", help="Launch Google Material 3 OG Canvas Studio Web UI", parents=[common_parser])
+    p_srv = subparsers.add_parser("serve", help="Launch Material 3 OG Canvas Forge Studio Web UI", parents=[common_parser])
     p_srv.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)")
     p_srv.add_argument("-p", "--port", type=int, default=8080, help="Port to listen on (default: 8080)")
     p_srv.add_argument("--no-browser", action="store_true", help="Do not automatically open browser on launch")

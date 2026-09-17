@@ -7,7 +7,7 @@
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero%20external-brightgreen.svg)](https://docs.python.org/3/library/)
 [![Tests](https://img.shields.io/badge/tests-54%2F54%20passing-success.svg)](https://github.com/1nc0gn30/og-canvas-forge)
 
-> **Pure Python Open Graph Social Card Generator, SVG Canvas Renderer, Dynamic Banner Synthesizer, Typography Layout Engine with Auto Text-Wrapping, 16 Gradient Themes, 7 Geometric Background Patterns, 18 Preset Templates, HTML Meta Tag Generator, Uncompressed BMP/PPM Image Rasterizer, FastMCP Server & Google Material 3 Light Mode Web UI.**
+> **Pure Python Open Graph Social Card Generator, SVG Canvas Renderer, Dynamic Banner Synthesizer, Typography Layout Engine with Auto Text-Wrapping, 16 Gradient Themes, 7 Geometric Background Patterns, 18 Preset Templates, HTML Meta Tag Generator, Uncompressed BMP/PPM Image Rasterizer, FastMCP Server & Material 3 Inspired Studio Web UI.**
 
 ---
 
@@ -22,7 +22,7 @@
 - 🖼️ **Pure Python Image Rasterizers**: Built-in 24-bit uncompressed BMP and binary PPM format writers for native raster generation without Pillow/Cairo dependencies.
 - 🔌 **Model Context Protocol (FastMCP) Server**: Full JSON-RPC 2.0 stdio server supporting Claude Desktop, Cursor, and Cline with tools (`og_generate_card`, `og_batch_generate`, `og_render_html_meta`, `og_list_templates`, `og_list_themes`, `og_diagnostics`), resource schemas, and prompt templates.
 - 💻 **Multi-OS Native CLI**: Comprehensive subcommands (`generate`, `template`, `themes`, `templates`, `meta`, `batch`, `serve`, `mcp`, `diagnostics`) supporting parent-parser `--no-color`, `-v`/`--version`, `-q`/`--quiet`.
-- 🌐 **Google Material 3 Light Mode Studio Web UI**: Clean, responsive, interactive dual-pane canvas editor, real-time SVG viewport, template drawer, theme switcher, and REST API.
+- 🌐 **Material 3 Studio Web UI**: Clean, responsive, interactive dual-pane canvas editor (design influenced by Google Material 3 tokens), real-time SVG viewport, template drawer, theme switcher, and REST API.
 
 ---
 
@@ -33,7 +33,7 @@ flowchart TD
     subgraph Client ["Clients & Interfaces"]
         CLI["CLI Subcommands\n(og-canvas-forge)"]
         MCP["FastMCP JSON-RPC 2.0\n(Claude / Cursor / Cline)"]
-        WebUI["Google Material 3 Web UI\n(public/index.html)"]
+        WebUI["Material 3 Studio Web UI\n(public/index.html)"]
         REST["REST HTTP API\n(ThreadingHTTPServer)"]
     end
 
@@ -136,7 +136,7 @@ og-canvas-forge meta "My Blog Title" https://example.com/cover.svg \
   --description "Comprehensive guide to modern web development." \
   --twitter-handle "@myaccount"
 
-# Launch the interactive Google Material 3 Web Studio
+# Launch the interactive Material 3 Studio
 og-canvas-forge serve --port 8080 --open
 
 # Run the FastMCP server over stdio
@@ -175,7 +175,7 @@ Integrate `og-canvas-forge` directly into **Claude Desktop**, **Cursor**, or **C
 
 ---
 
-## 🌐 Google Material 3 Web Studio & REST API
+## 🌐 Material 3 Studio Web UI & REST API
 
 Launch the local studio server via `og-canvas-forge serve` to access the interactive web interface:
 
