@@ -463,7 +463,15 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             self._handle_api_diagnostics()
             return
 
-        # 5. UI Root and Static Files
+        # 5. API: Card Accessibility Audit
+        if path == "/api/audit":
+            query = urllib.parse.parse_qs(parsed_url.query)
+            theme = query.get("theme", ["aurora"])[0]
+            template = query.get("template", [None])[0]
+            self._handle_api_audit({"theme": theme, "template": template})
+            return
+
+        # 6. UI Root and Static Files
         if path in ("/", "/index.html", "/studio"):
             self._serve_studio_index()
             return
@@ -530,6 +538,12 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             return
         elif path == "/api/batch":
             self._handle_api_batch(payload)
+            return
+        elif path == "/api/audit":
+            self._handle_api_audit(payload)
+            return
+        elif path == "/api/schema-ld":
+            self._handle_api_schema_ld(payload)
             return
 
         self._send_error_json(f"POST endpoint not found: {path}", status=HTTPStatus.NOT_FOUND)
@@ -780,6 +794,46 @@ class StudioHTTPRequestHandler(BaseHTTPRequestHandler):
             })
 
         self._send_json({"count": len(results), "cards": results})
+
+    def _handle_api_audit(self, payload: Dict[str, Any]) -> None:
+        """Audit card accessibility against WCAG 2.2 criteria."""
+        template_id = payload.get("template")
+        theme_id = payload.get("theme", "aurora")
+        title = payload.get("title", "Sample Card Headline")
+        subtitle = payload.get("subtitle", "Sample Card Subtitle")
+        try:
+            from .card_generator import validate_card_accessibility
+            if template_id:
+                report = validate_card_accessibility(template_id)
+            else:
+                cfg = OGCardConfig(title=title, subtitle=subtitle, theme=theme_id)
+                report = validate_card_accessibility(cfg)
+            self._send_json(report.to_dict())
+        except Exception as err:
+            self._send_error_json(f"Accessibility audit failed: {err}", status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def _handle_api_schema_ld(self, payload: Dict[str, Any]) -> None:
+        """Generate complete Schema.org JSON-LD snippet."""
+        title = payload.get("title", "Sample Card Headline")
+        subtitle = payload.get("subtitle")
+        page_url = payload.get("page_url")
+        image_url = payload.get("image_url")
+        schema_type = payload.get("schema_type")
+        publisher = payload.get("publisher")
+        try:
+            from .card_generator import generate_schema_json_ld
+            cfg = OGCardConfig(title=title, subtitle=subtitle, site_name=publisher)
+            json_str = generate_schema_json_ld(
+                cfg,
+                page_url=page_url,
+                image_url=image_url,
+                schema_type=schema_type,
+                publisher_name=publisher,
+                as_script_tag=False,
+            )
+            self._send_json({"schema_ld": json.loads(json_str), "raw_script": f'<script type="application/ld+json">\n{json_str}\n</script>'})
+        except Exception as err:
+            self._send_error_json(f"Schema.org generation failed: {err}", status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress noisy request logs in test/silent mode unless DEBUG is set."""

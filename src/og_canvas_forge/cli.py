@@ -290,6 +290,16 @@ def handle_generate(args: argparse.Namespace) -> int:
             if not content.endswith("\n"):
                 sys.stdout.write("\n")
 
+    if getattr(args, "audit", False):
+        report = card.audit_accessibility()
+        status_str = Term.green("PASS") if report.is_compliant else Term.red("FAIL")
+        sys.stderr.write(f"\n{Term.bold(Term.cyan('WCAG 2.2 Accessibility Report:'))} [{status_str}] (Score: {report.score}/100)\n")
+        for el, ratio in report.contrast_ratios.items():
+            comp = report.wcag_compliance.get(el, {})
+            aa = Term.green("AA Pass") if comp.get("aa_pass") else Term.red("AA Fail")
+            sys.stderr.write(f"  • {el.capitalize():<10}: {ratio:.2f}:1 [{aa}]\n")
+        sys.stderr.write("\n")
+
     return 0
 
 
@@ -497,11 +507,79 @@ def handle_meta(args: argparse.Namespace) -> int:
     if args.output and args.output != "-":
         target = normalize_path(args.output)
         atomic_write_text(target, meta_html)
-        if not args.quiet:
+        if not getattr(args, "quiet", False):
             print(f"{Term.green('✔ Saved HTML meta tags to:')} {Term.bold(str(target))}")
     else:
         print(meta_html)
 
+    return 0
+
+
+def handle_audit(args: argparse.Namespace) -> int:
+    """Handle `audit` subcommand: audit card accessibility and contrast against WCAG 2.2."""
+    target = getattr(args, "target", None)
+    theme = getattr(args, "theme", None)
+    template = getattr(args, "template", None) or (target if target in TEMPLATES_CATALOG else None)
+
+    from .card_generator import validate_card_accessibility
+    if template:
+        report = validate_card_accessibility(template)
+    else:
+        title = getattr(args, "title", None) or target or "Card Headline"
+        subtitle = getattr(args, "subtitle", None) or "Card Subtitle"
+        cfg = OGCardConfig(title=title, subtitle=subtitle, theme=theme or "aurora")
+        report = validate_card_accessibility(cfg)
+
+    if getattr(args, "json", False):
+        print(json.dumps(report.to_dict(), indent=2))
+        return 0
+
+    print(Term.bold(Term.cyan("\n--- WCAG 2.2 Social Card Accessibility Report ---")))
+    status_str = Term.green("PASS") if report.is_compliant else Term.red("FAIL")
+    print(f"Compliance Status : {status_str} (Score: {report.score}/100)")
+    print(Term.bold("\nContrast Ratios:"))
+    for el, ratio in report.contrast_ratios.items():
+        comp = report.wcag_compliance.get(el, {})
+        aa = Term.green("AA Pass") if comp.get("aa_pass") else Term.red("AA Fail")
+        aaa = Term.green("AAA Pass") if comp.get("aaa_pass") else Term.yellow("AAA Fail")
+        print(f"  • {el.capitalize():<10}: {ratio:.2f}:1 [{aa} | {aaa}]")
+
+    print(Term.bold("\nPlatform Readability:"))
+    for plat, rating in report.platform_readability.items():
+        clr = Term.green if rating == "Excellent" else (Term.cyan if rating == "Good" else Term.yellow)
+        print(f"  • {plat.capitalize():<10}: {clr(rating)}")
+
+    print(Term.bold("\nRecommendations:"))
+    for rec in report.recommendations:
+        print(f"  - {rec}")
+    print()
+    return 0
+
+
+def handle_schema(args: argparse.Namespace) -> int:
+    """Handle `schema` subcommand: generate complete Schema.org JSON-LD snippet."""
+    from .card_generator import generate_schema_json_ld
+    cfg = OGCardConfig(
+        title=args.title,
+        subtitle=getattr(args, "subtitle", None),
+        author=AuthorSpec(name=args.author) if getattr(args, "author", None) else None,
+        site_name=getattr(args, "publisher", None),
+    )
+    snippet = generate_schema_json_ld(
+        cfg,
+        page_url=getattr(args, "url", None),
+        image_url=getattr(args, "image", None),
+        schema_type=getattr(args, "schema_type", None),
+        publisher_name=getattr(args, "publisher", None),
+        as_script_tag=True,
+    )
+    if args.output and args.output != "-":
+        target = normalize_path(args.output)
+        atomic_write_text(target, snippet)
+        if not getattr(args, "quiet", False):
+            print(f"{Term.green('✔ Saved Schema.org JSON-LD to:')} {Term.bold(str(target))}")
+    else:
+        print(snippet)
     return 0
 
 
@@ -1389,6 +1467,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_gen.add_argument("--ticket", help="Ticket identifier for event_ticket layout")
     p_gen.add_argument("--badge", help="Custom badge pill text")
     p_gen.add_argument("--preview", action="store_true", help="Open generated card in default web browser")
+    p_gen.add_argument("--audit", action="store_true", help="Audit card contrast and accessibility against WCAG 2.2 criteria")
 
     # 2. `batch`
     p_batch = subparsers.add_parser("batch", help="Batch generate cards from JSON or CSV file", parents=[common_parser])
@@ -1425,22 +1504,42 @@ def build_parser() -> argparse.ArgumentParser:
     p_meta.add_argument("--tags", help="Comma-separated article tags")
     p_meta.add_argument("-o", "--output", help="File to write meta tags to (or stdout if omitted)")
 
-    # 6. `serve`
+    # 6. `audit`
+    p_aud = subparsers.add_parser("audit", help="Audit OG card contrast and accessibility against WCAG 2.2 AA/AAA", parents=[common_parser])
+    p_aud.add_argument("target", nargs="?", help="Template ID, theme ID, or custom card title to audit")
+    p_aud.add_argument("--theme", help="Theme ID to audit")
+    p_aud.add_argument("--template", help="Template ID to audit")
+    p_aud.add_argument("-t", "--title", help="Card title")
+    p_aud.add_argument("-s", "--subtitle", help="Card subtitle")
+    p_aud.add_argument("--json", action="store_true", help="Output accessibility report as JSON")
+
+    # 7. `schema`
+    p_sch = subparsers.add_parser("schema", help="Generate complete Schema.org Rich Snippet JSON-LD for social card", parents=[common_parser])
+    p_sch.add_argument("-t", "--title", required=True, help="Card headline title")
+    p_sch.add_argument("-s", "--subtitle", help="Card subtitle / description")
+    p_sch.add_argument("-u", "--url", help="Canonical page URL")
+    p_sch.add_argument("-i", "--image", "--image-url", dest="image", help="Social card image URL")
+    p_sch.add_argument("-a", "--author", help="Author name")
+    p_sch.add_argument("--type", dest="schema_type", help="Schema.org type (BlogPosting, Article, Event, PodcastEpisode, TechArticle)")
+    p_sch.add_argument("--publisher", help="Publisher or organization name")
+    p_sch.add_argument("-o", "--output", help="Write JSON-LD to file")
+
+    # 8. `serve`
     p_srv = subparsers.add_parser("serve", help="Launch Material 3 OG Canvas Forge Studio Web UI", parents=[common_parser])
     p_srv.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)")
     p_srv.add_argument("-p", "--port", type=int, default=8080, help="Port to listen on (default: 8080)")
     p_srv.add_argument("--no-browser", action="store_true", help="Do not automatically open browser on launch")
 
-    # 7. `mcp`
+    # 9. `mcp`
     subparsers.add_parser("mcp", help="Run Model Context Protocol (MCP) server over stdio", parents=[common_parser])
 
-    # 8. `platform` / `doctor` / `diagnostics`
+    # 10. `platform` / `doctor` / `diagnostics`
     for alias in ["platform", "doctor", "diagnostics"]:
         p_diag = subparsers.add_parser(alias, help="Perform multi-OS diagnostics check", parents=[common_parser])
         p_diag.add_argument("--json", action="store_true", help="Output diagnostics report as JSON")
         p_diag.add_argument("--detailed", action="store_true", help="Include verbose environment details")
 
-    # 9. `test`
+    # 11. `test`
     p_tst = subparsers.add_parser("test", help="Run self-verification test suite", parents=[common_parser])
     p_tst.add_argument("--verbose", action="store_true", help="Verbose test execution")
     p_tst.add_argument("-k", "--filter", help="Filter tests by name substring")
@@ -1488,6 +1587,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return handle_themes(args)
     elif subcommand == "meta":
         return handle_meta(args)
+    elif subcommand == "audit":
+        return handle_audit(args)
+    elif subcommand == "schema":
+        return handle_schema(args)
     elif subcommand == "serve":
         return handle_serve(args)
     elif subcommand == "mcp":

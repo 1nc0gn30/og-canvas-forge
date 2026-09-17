@@ -299,6 +299,11 @@ class GeneratedCard:
         """Rasterize and save PPM image to disk atomically."""
         return atomic_write_bytes(file_path, self.to_ppm())
 
+    def audit_accessibility(self) -> CardAccessibilityReport:
+        """Audit WCAG 2.2 color contrast and platform readability for this card."""
+        from .card_generator import validate_card_accessibility
+        return validate_card_accessibility(self.config)
+
 
 @dataclass
 class TemplatePreset:
@@ -310,3 +315,26 @@ class TemplatePreset:
     description: str
     config: OGCardConfig
     sample_data: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class CardAccessibilityReport:
+    """WCAG 2.2 accessibility & contrast compliance report for an OG card."""
+
+    is_compliant: bool
+    score: float
+    contrast_ratios: Dict[str, float]
+    wcag_compliance: Dict[str, Dict[str, Any]]
+    platform_readability: Dict[str, str]
+    recommendations: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert accessibility report to serializable dictionary."""
+        return {
+            "is_compliant": self.is_compliant,
+            "score": round(self.score, 1),
+            "contrast_ratios": {k: round(v, 2) for k, v in self.contrast_ratios.items()},
+            "wcag_compliance": self.wcag_compliance,
+            "platform_readability": self.platform_readability,
+            "recommendations": self.recommendations,
+        }

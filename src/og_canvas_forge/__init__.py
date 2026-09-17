@@ -14,6 +14,7 @@ __license__ = "MIT"
 from .models import (
     AuthorSpec,
     BadgeSpec,
+    CardAccessibilityReport,
     CardDimension,
     CardLayout,
     CardTheme,
@@ -24,16 +25,36 @@ from .models import (
 
 # Dynamic import with fallback to guarantee seamless interoperability
 try:
-    from .card_generator import export_png, export_svg, generate_card, generate_card_image
+    from .card_generator import (
+        calculate_contrast_ratio,
+        calculate_relative_luminance,
+        export_png,
+        export_svg,
+        generate_card,
+        generate_card_image,
+        generate_html_meta,
+        generate_schema_json_ld,
+        validate_card_accessibility,
+    )
 except ImportError:
     try:
         from .generator import export_svg, generate_card
         export_png = None
         generate_card_image = None
+        generate_html_meta = None
+        generate_schema_json_ld = None
+        validate_card_accessibility = None
+        calculate_contrast_ratio = None
+        calculate_relative_luminance = None
     except ImportError:
         from .mcp_server import export_svg, generate_card
         export_png = None
         generate_card_image = None
+        generate_html_meta = None
+        generate_schema_json_ld = None
+        validate_card_accessibility = None
+        calculate_contrast_ratio = None
+        calculate_relative_luminance = None
 
 try:
     from .catalog import get_template, list_templates
@@ -71,6 +92,12 @@ __all__ = [
     "AuthorSpec",
     "BadgeSpec",
     "TemplatePreset",
+    "CardAccessibilityReport",
+    "validate_card_accessibility",
+    "generate_schema_json_ld",
+    "generate_html_meta",
+    "calculate_contrast_ratio",
+    "calculate_relative_luminance",
     "handle_jsonrpc_request",
     "process_request",
     "run_stdio_server",

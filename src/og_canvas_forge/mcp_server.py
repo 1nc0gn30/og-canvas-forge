@@ -1462,6 +1462,69 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        "name": "og_audit_accessibility",
+        "description": "Audit Open Graph card accessibility against WCAG 2.2 AA/AAA contrast criteria and calculate social platform readability scores.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "theme": {
+                    "type": "string",
+                    "description": "Theme palette ID to audit (aurora, cyberpunk, dark, light, ocean, sunset, emerald, matrix, gold, monochrome)",
+                },
+                "template": {
+                    "type": "string",
+                    "description": "Preset template ID to audit",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Card title (optional, defaults to sample title)",
+                },
+                "subtitle": {
+                    "type": "string",
+                    "description": "Card subtitle (optional)",
+                },
+            },
+        },
+    },
+    {
+        "name": "og_generate_schema_ld",
+        "description": "Generate complete Schema.org Rich Snippet JSON-LD for an Open Graph social card (Article, BlogPosting, Event, PodcastEpisode, TechArticle).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Main title / headline (required)",
+                },
+                "subtitle": {
+                    "type": "string",
+                    "description": "Description / subtitle text",
+                },
+                "page_url": {
+                    "type": "string",
+                    "description": "Canonical page URL",
+                },
+                "image_url": {
+                    "type": "string",
+                    "description": "URL of the social card image",
+                },
+                "author": {
+                    "type": "string",
+                    "description": "Author name",
+                },
+                "schema_type": {
+                    "type": "string",
+                    "description": "Schema.org type (BlogPosting, Article, Event, PodcastEpisode, TechArticle, WebPage)",
+                },
+                "publisher_name": {
+                    "type": "string",
+                    "description": "Publisher / organization name",
+                },
+            },
+            "required": ["title"],
+        },
+    },
 ]
 
 MCP_RESOURCES = [
@@ -1816,6 +1879,43 @@ def execute_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         detailed = bool(arguments.get("detailed", False))
         diag = run_diagnostics(detailed=detailed)
         return {"content": [{"type": "text", "text": json.dumps(diag, indent=2)}], "isError": False}
+
+    elif tool_key in ("og_audit_accessibility", "audit_accessibility", "audit_card_accessibility"):
+        theme_id = arguments.get("theme", "aurora")
+        template_id = arguments.get("template")
+        title = arguments.get("title", "Sample Card Headline")
+        subtitle = arguments.get("subtitle", "Sample Card Subtitle")
+        from .card_generator import validate_card_accessibility
+        if template_id:
+            report = validate_card_accessibility(template_id)
+        else:
+            cfg = OGCardConfig(title=title, subtitle=subtitle, theme=theme_id)
+            report = validate_card_accessibility(cfg)
+        return {
+            "content": [{"type": "text", "text": json.dumps(report.to_dict(), indent=2)}],
+            "isError": False,
+        }
+
+    elif tool_key in ("og_generate_schema_ld", "generate_schema_ld", "schema_json_ld"):
+        title = arguments.get("title")
+        if not title:
+            return {"content": [{"type": "text", "text": "Error: 'title' is required"}], "isError": True}
+        from .card_generator import generate_schema_json_ld
+        cfg = OGCardConfig(
+            title=title,
+            subtitle=arguments.get("subtitle"),
+            author=AuthorSpec(name=arguments["author"]) if arguments.get("author") else None,
+            site_name=arguments.get("publisher_name"),
+            layout=arguments.get("layout", "default"),
+        )
+        schema_code = generate_schema_json_ld(
+            cfg,
+            page_url=arguments.get("page_url"),
+            image_url=arguments.get("image_url"),
+            schema_type=arguments.get("schema_type"),
+            publisher_name=arguments.get("publisher_name"),
+        )
+        return {"content": [{"type": "text", "text": schema_code}], "isError": False}
 
     else:
         return {

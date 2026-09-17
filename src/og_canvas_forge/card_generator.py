@@ -28,6 +28,7 @@ from .layout_engine import (
 from .models import (
     AuthorSpec,
     BadgeSpec,
+    CardAccessibilityReport,
     CardDimension,
     CardLayout,
     CardTheme,
@@ -469,8 +470,296 @@ def _render_event_ticket_feature(
 
 
 # ---------------------------------------------------------------------------
-# HTML Meta Tag & JSON-LD Generator
+# Color Math, WCAG Accessibility & Contrast Engine
 # ---------------------------------------------------------------------------
+
+def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
+    """Parse hex color string like #1a73e8 or rgba() into (r, g, b) integers."""
+    hex_color = hex_color.strip()
+    if hex_color.startswith("#"):
+        c = hex_color.lstrip("#")
+        if len(c) == 3:
+            c = "".join([x * 2 for x in c])
+        if len(c) >= 6:
+            return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+    elif hex_color.startswith("rgba") or hex_color.startswith("rgb"):
+        try:
+            parts = hex_color.split("(")[1].split(")")[0].split(",")
+            return (int(float(parts[0])), int(float(parts[1])), int(float(parts[2])))
+        except Exception:
+            pass
+    return (15, 23, 42)
+
+
+def _parse_color_rgba(color_str: str) -> Tuple[int, int, int, float]:
+    """Parse color string in hex (#rgb, #rrggbb, #rrggbbaa) or rgb/rgba format."""
+    color_str = color_str.strip()
+    if color_str.startswith("#"):
+        c = color_str.lstrip("#")
+        if len(c) == 3:
+            c = "".join([x * 2 for x in c])
+        if len(c) == 4:
+            r = int(c[0] * 2, 16)
+            g = int(c[1] * 2, 16)
+            b = int(c[2] * 2, 16)
+            a = int(c[3] * 2, 16) / 255.0
+            return (r, g, b, a)
+        if len(c) == 6:
+            return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16), 1.0)
+        if len(c) == 8:
+            return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16), int(c[6:8], 16) / 255.0)
+    elif color_str.startswith("rgba") or color_str.startswith("rgb"):
+        try:
+            parts = color_str.split("(")[1].split(")")[0].split(",")
+            r, g, b = int(float(parts[0])), int(float(parts[1])), int(float(parts[2]))
+            a = float(parts[3]) if len(parts) >= 4 else 1.0
+            return (r, g, b, a)
+        except Exception:
+            pass
+    return (15, 23, 42, 1.0)
+
+
+def _composite_over(fg_color: str, bg_color: str) -> Tuple[int, int, int]:
+    """Alpha-composite a foreground color (potentially transparent) over a background color."""
+    fg_r, fg_g, fg_b, fg_a = _parse_color_rgba(fg_color)
+    bg_r, bg_g, bg_b, _ = _parse_color_rgba(bg_color)
+    out_r = int(round(fg_a * fg_r + (1.0 - fg_a) * bg_r))
+    out_g = int(round(fg_a * fg_g + (1.0 - fg_a) * bg_g))
+    out_b = int(round(fg_a * fg_b + (1.0 - fg_a) * bg_b))
+    return (out_r, out_g, out_b)
+
+
+def calculate_relative_luminance(color: Union[Tuple[int, int, int], str]) -> float:
+    """Calculate WCAG 2.2 relative luminance from RGB tuple or color string."""
+    if isinstance(color, str):
+        rgb = _hex_to_rgb(color)
+    else:
+        rgb = color
+    r, g, b = rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0
+    r_lin = r / 12.92 if r <= 0.04045 else ((r + 0.055) / 1.055) ** 2.4
+    g_lin = g / 12.92 if g <= 0.04045 else ((g + 0.055) / 1.055) ** 2.4
+    b_lin = b / 12.92 if b <= 0.04045 else ((b + 0.055) / 1.055) ** 2.4
+    return 0.2126 * r_lin + 0.7152 * g_lin + 0.0722 * b_lin
+
+
+def calculate_contrast_ratio(
+    color1: Union[Tuple[int, int, int], str],
+    color2: Union[Tuple[int, int, int], str],
+) -> float:
+    """Calculate WCAG contrast ratio between two colors (range: 1.0 to 21.0)."""
+    l1 = calculate_relative_luminance(color1)
+    l2 = calculate_relative_luminance(color2)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def validate_card_accessibility(config: Union[OGCardConfig, str]) -> CardAccessibilityReport:
+    """Audit Open Graph card accessibility, color contrast, and platform readability."""
+    if isinstance(config, str):
+        from .catalog import get_template
+        config = get_template(config).config
+
+    theme = get_theme(config.theme)
+
+    # Worst-case contrast across background gradient stops
+    def get_worst_ratio(fg: str) -> float:
+        r1 = calculate_contrast_ratio(fg, theme.bg_start)
+        r2 = calculate_contrast_ratio(fg, theme.bg_end)
+        return min(r1, r2)
+
+    title_ratio = get_worst_ratio(theme.text_primary)
+    subtitle_ratio = get_worst_ratio(theme.text_secondary)
+    composited_badge_bg = _composite_over(theme.badge_bg, theme.bg_start)
+    badge_ratio = calculate_contrast_ratio(theme.badge_text, composited_badge_bg)
+    author_ratio = get_worst_ratio(theme.text_primary)
+
+    contrast_ratios = {
+        "title": title_ratio,
+        "subtitle": subtitle_ratio,
+        "badge": badge_ratio,
+        "author": author_ratio,
+    }
+
+    wcag_compliance = {
+        "title": {
+            "aa_pass": title_ratio >= 3.0,
+            "aaa_pass": title_ratio >= 4.5,
+            "is_large_text": True,
+            "required_aa": 3.0,
+            "required_aaa": 4.5,
+        },
+        "subtitle": {
+            "aa_pass": subtitle_ratio >= 4.5,
+            "aaa_pass": subtitle_ratio >= 7.0,
+            "is_large_text": False,
+            "required_aa": 4.5,
+            "required_aaa": 7.0,
+        },
+        "badge": {
+            "aa_pass": badge_ratio >= 3.0,
+            "aaa_pass": badge_ratio >= 4.5,
+            "is_large_text": True,
+            "required_aa": 3.0,
+            "required_aaa": 4.5,
+        },
+        "author": {
+            "aa_pass": author_ratio >= 3.0,
+            "aaa_pass": author_ratio >= 4.5,
+            "is_large_text": True,
+            "required_aa": 3.0,
+            "required_aaa": 4.5,
+        },
+    }
+
+    passed_checks = sum(1 for el in wcag_compliance.values() if el["aa_pass"])
+    total_checks = len(wcag_compliance)
+    base_score = (passed_checks / total_checks) * 70.0
+    aaa_bonus = sum(10.0 / total_checks for el in wcag_compliance.values() if el["aaa_pass"])
+    title_bonus = 10.0 if title_ratio >= 7.0 else (5.0 if title_ratio >= 4.5 else 0.0)
+    score = min(100.0, max(0.0, base_score + aaa_bonus + (title_bonus * 0.5)))
+
+    is_compliant = all(el["aa_pass"] for el in wcag_compliance.values())
+
+    platform_readability = {
+        "twitter": "Excellent" if title_ratio >= 7.0 and subtitle_ratio >= 4.5 else ("Good" if title_ratio >= 4.5 else "Poor"),
+        "linkedin": "Excellent" if subtitle_ratio >= 4.5 and title_ratio >= 5.0 else ("Good" if title_ratio >= 3.0 else "Poor"),
+        "facebook": "Excellent" if title_ratio >= 6.0 else ("Good" if title_ratio >= 3.5 else "Fair"),
+        "slack": "Excellent" if title_ratio >= 4.5 and subtitle_ratio >= 3.5 else "Good",
+    }
+
+    recommendations: List[str] = []
+    if not wcag_compliance["title"]["aa_pass"]:
+        recommendations.append(
+            f"Title contrast ratio ({title_ratio:.2f}:1) fails WCAG AA large text requirement (3.0:1). Lighten text_primary or darken background."
+        )
+    elif not wcag_compliance["title"]["aaa_pass"]:
+        recommendations.append(
+            f"Title contrast ratio ({title_ratio:.2f}:1) passes AA but falls short of AAA (4.5:1). Increase luminance difference for maximum clarity."
+        )
+
+    if not wcag_compliance["subtitle"]["aa_pass"]:
+        recommendations.append(
+            f"Subtitle contrast ratio ({subtitle_ratio:.2f}:1) fails WCAG AA normal text requirement (4.5:1). Adjust text_secondary."
+        )
+
+    if not wcag_compliance["badge"]["aa_pass"]:
+        recommendations.append(
+            f"Badge contrast ratio ({badge_ratio:.2f}:1) is low. Adjust badge_text or badge_bg for sharper badge legibility."
+        )
+
+    if not recommendations:
+        recommendations.append("All typography elements pass WCAG 2.2 contrast requirements. Card is highly legible across social platform feeds.")
+
+    return CardAccessibilityReport(
+        is_compliant=is_compliant,
+        score=score,
+        contrast_ratios=contrast_ratios,
+        wcag_compliance=wcag_compliance,
+        platform_readability=platform_readability,
+        recommendations=recommendations,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schema.org Rich Snippet & HTML Meta Tag Generator
+# ---------------------------------------------------------------------------
+
+def generate_schema_json_ld(
+    config: Union[OGCardConfig, str],
+    page_url: Optional[str] = None,
+    image_url: Optional[str] = None,
+    schema_type: Optional[str] = None,
+    publisher_name: Optional[str] = None,
+    as_script_tag: bool = True,
+) -> str:
+    """Generate complete Schema.org Rich Snippet JSON-LD for an Open Graph card."""
+    if isinstance(config, str):
+        from .catalog import get_template
+        config = get_template(config).config
+
+    dim = CardDimension.from_value(config.dimensions)
+    canonical_url = page_url or "https://example.com/post"
+    img_src = image_url or "https://example.com/og-image.svg"
+
+    # Derive default schema type from card layout if not provided
+    if not schema_type:
+        layout_str = str(config.layout.value if hasattr(config.layout, "value") else config.layout)
+        layout_type_map = {
+            "podcast": "PodcastEpisode",
+            "event_ticket": "Event",
+            "dev_code": "TechArticle",
+            "minimal": "WebPage",
+            "centered": "Article",
+            "split": "BlogPosting",
+            "default": "BlogPosting",
+        }
+        schema_type = layout_type_map.get(layout_str, "BlogPosting")
+
+    author_name = ""
+    author_handle = ""
+    author_title = ""
+    if config.author:
+        author_name = config.author.name if hasattr(config.author, "name") else str(config.author)
+        author_handle = getattr(config.author, "handle", "") or ""
+        author_title = getattr(config.author, "title", "") or ""
+
+    schema_ld: Dict[str, Any] = {
+        "@context": "https://schema.org",
+        "@type": schema_type,
+        "headline": config.title,
+        "description": config.subtitle or config.title,
+        "image": {
+            "@type": "ImageObject",
+            "url": img_src,
+            "width": dim.width,
+            "height": dim.height,
+        },
+        "url": canonical_url,
+    }
+
+    if author_name:
+        author_obj: Dict[str, Any] = {
+            "@type": "Person",
+            "name": author_name,
+        }
+        if author_title:
+            author_obj["jobTitle"] = author_title
+        if author_handle:
+            clean_handle = author_handle.lstrip("@")
+            author_obj["sameAs"] = f"https://x.com/{clean_handle}"
+        schema_ld["author"] = author_obj
+
+    pub = publisher_name or config.site_name
+    if pub:
+        schema_ld["publisher"] = {
+            "@type": "Organization",
+            "name": pub,
+        }
+
+    if config.date_str:
+        schema_ld["datePublished"] = config.date_str
+    if config.tags:
+        schema_ld["keywords"] = ", ".join(config.tags)
+    if config.category:
+        schema_ld["articleSection"] = config.category
+
+    # Layout / archetype specific enrichments
+    if schema_type == "PodcastEpisode" and config.episode_number:
+        schema_ld["episodeNumber"] = config.episode_number
+    elif schema_type == "Event":
+        if config.date_str:
+            schema_ld["startDate"] = config.date_str
+        if config.ticket_number:
+            schema_ld["identifier"] = config.ticket_number
+    elif schema_type == "TechArticle" and config.code_language:
+        schema_ld["programmingLanguage"] = config.code_language
+
+    json_ld_str = json.dumps(schema_ld, indent=2, ensure_ascii=False)
+    if as_script_tag:
+        return f'<script type="application/ld+json">\n{json_ld_str}\n</script>'
+    return json_ld_str
+
 
 def generate_html_meta(
     config: Union[OGCardConfig, str],
@@ -489,37 +778,12 @@ def generate_html_meta(
     canonical_url = html.escape(page_url or "https://example.com/post")
     site_name = html.escape(config.site_name or "og-canvas-forge")
 
-    author_name = ""
     author_handle = ""
     if config.author:
-        author_name = config.author.name if hasattr(config.author, "name") else str(config.author)
         author_handle = getattr(config.author, "handle", "") or ""
 
     tags_keywords = ", ".join(config.tags) if config.tags else ""
-
-    # Schema.org JSON-LD dict
-    schema_ld = {
-        "@context": "https://schema.org",
-        "@type": "BlogPosting" if config.layout == CardLayout.DEFAULT else "WebPage",
-        "headline": config.title,
-        "description": config.subtitle or config.title,
-        "image": image_url or "https://example.com/og-image.svg",
-        "url": page_url or "https://example.com/post",
-    }
-    if author_name:
-        schema_ld["author"] = {
-            "@type": "Person",
-            "name": author_name,
-        }
-    if config.date_str:
-        schema_ld["datePublished"] = config.date_str
-    if config.site_name:
-        schema_ld["publisher"] = {
-            "@type": "Organization",
-            "name": config.site_name,
-        }
-
-    json_ld_str = json.dumps(schema_ld, indent=2, ensure_ascii=False)
+    json_ld_str = generate_schema_json_ld(config, page_url=page_url, image_url=image_url, as_script_tag=False)
 
     return f"""<!-- Open Graph / Facebook -->
 <meta property="og:type" content="website" />
@@ -574,24 +838,6 @@ def generate_card(
 # ---------------------------------------------------------------------------
 # Pure Python BMP & PPM Image Rasterizer (Zero External Dependencies)
 # ---------------------------------------------------------------------------
-
-def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
-    """Parse hex color string like #1a73e8 or rgba() into (r, g, b) integers."""
-    hex_color = hex_color.strip()
-    if hex_color.startswith("#"):
-        c = hex_color.lstrip("#")
-        if len(c) == 3:
-            c = "".join([x * 2 for x in c])
-        if len(c) >= 6:
-            return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
-    elif hex_color.startswith("rgba") or hex_color.startswith("rgb"):
-        try:
-            parts = hex_color.split("(")[1].split(")")[0].split(",")
-            return (int(float(parts[0])), int(float(parts[1])), int(float(parts[2])))
-        except Exception:
-            pass
-    return (15, 23, 42)
-
 
 # 8x8 Basic Bitmap Font for pure-Python fallback rendering
 _BITMAP_FONT_8X8: Dict[str, List[int]] = {
