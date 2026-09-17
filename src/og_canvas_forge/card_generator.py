@@ -10,6 +10,7 @@ import html
 import json
 import math
 import struct
+import zlib
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .compat import normalize_path
@@ -845,8 +846,40 @@ def render_svg_to_bmp(card_svg: str, width: int = 1200, height: int = 630) -> by
     return bmp_header + dib_header + bytes(bgr_rows)
 
 
-def generate_card_image(config: OGCardConfig, format: str = "bmp") -> bytes:
-    """Directly synthesize binary image bytes in 'bmp' or 'ppm' format."""
+def _encode_png(width: int, height: int, rgb_buffer: Sequence[int]) -> bytes:
+    """Encode an RGB byte buffer into standard RFC 2083 PNG binary bytes."""
+    # PNG signature: 8 bytes
+    signature = b"\x89PNG\r\n\x1a\n"
+
+    # IHDR chunk: 13 bytes
+    # Width (4), Height (4), Bit depth (1), Color type (1=indexed, 2=RGB, 3=palette, 6=RGBA),
+    # Compression (0), Filter (0), Interlace (0)
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data))
+    ihdr_chunk = struct.pack(">I", len(ihdr_data)) + b"IHDR" + ihdr_data + ihdr_crc
+
+    # IDAT chunk: scanlines prefixed with filter byte 0 (None)
+    raw_scanlines = bytearray()
+    row_bytes = width * 3
+    for y in range(height):
+        raw_scanlines.append(0)  # Filter type: None
+        start = y * row_bytes
+        raw_scanlines.extend(rgb_buffer[start : start + row_bytes])
+
+    compressed_data = zlib.compress(bytes(raw_scanlines), level=6)
+    idat_crc = struct.pack(">I", zlib.crc32(b"IDAT" + compressed_data))
+    idat_chunk = struct.pack(">I", len(compressed_data)) + b"IDAT" + compressed_data + idat_crc
+
+    # IEND chunk
+    iend_data = b""
+    iend_crc = struct.pack(">I", zlib.crc32(b"IEND" + iend_data))
+    iend_chunk = struct.pack(">I", len(iend_data)) + b"IEND" + iend_data + iend_crc
+
+    return signature + ihdr_chunk + idat_chunk + iend_chunk
+
+
+def generate_card_image(config: OGCardConfig, format: str = "png") -> bytes:
+    """Directly synthesize binary image bytes in 'png', 'bmp', or 'ppm' format."""
     dim = CardDimension.from_value(config.dimensions)
     theme = get_theme(config.theme)
 
@@ -866,7 +899,11 @@ def generate_card_image(config: OGCardConfig, format: str = "bmp") -> bytes:
         subtitle=config.subtitle or (config.site_name or ""),
     )
 
-    if format.lower() == "ppm":
+    fmt = format.lower().strip()
+    if fmt == "png":
+        return _encode_png(dim.width, dim.height, rgb_buffer)
+
+    if fmt == "ppm":
         header = f"P6\n{dim.width} {dim.height}\n255\n".encode("ascii")
         return header + bytes(rgb_buffer)
 
@@ -914,3 +951,5 @@ def generate_card_image(config: OGCardConfig, format: str = "bmp") -> bytes:
 
 # Aliases for compatibility
 export_svg = generate_svg
+export_png = lambda config: generate_card_image(config, format="png")
+

@@ -24,12 +24,16 @@ from .models import (
 
 # Dynamic import with fallback to guarantee seamless interoperability
 try:
-    from .card_generator import export_svg, generate_card
+    from .card_generator import export_png, export_svg, generate_card, generate_card_image
 except ImportError:
     try:
         from .generator import export_svg, generate_card
+        export_png = None
+        generate_card_image = None
     except ImportError:
         from .mcp_server import export_svg, generate_card
+        export_png = None
+        generate_card_image = None
 
 try:
     from .catalog import get_template, list_templates
@@ -53,6 +57,8 @@ __all__ = [
     "__version__",
     "generate_card",
     "export_svg",
+    "export_png",
+    "generate_card_image",
     "get_template",
     "list_templates",
     "get_theme",
